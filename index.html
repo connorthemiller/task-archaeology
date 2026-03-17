@@ -1,0 +1,6423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORE SAMPLE // STRATUM ANALYSIS</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #060a10;
+    color: #7aacb8;
+    font-family: 'Share Tech Mono', 'JetBrains Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    cursor: crosshair;
+  }
+
+  #canvas-container {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  /* Scanline overlay */
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 20, 30, 0.08) 2px,
+      rgba(0, 20, 30, 0.08) 4px
+    );
+  }
+
+  /* CRT vignette */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 11;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(4, 8, 14, 0.7) 100%);
+  }
+
+  /* Chromatic aberration flicker — subtle */
+  .flicker {
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    pointer-events: none;
+    animation: flicker 8s infinite;
+    opacity: 0;
+  }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 0; }
+    96% { opacity: 0.03; background: rgba(0, 255, 200, 0.02); }
+    97% { opacity: 0; }
+    98% { opacity: 0.02; background: rgba(200, 0, 255, 0.01); }
+  }
+
+  /* Border frame */
+  .frame {
+    position: fixed;
+    inset: 8px;
+    border: 1px solid rgba(100, 180, 200, 0.15);
+    z-index: 12;
+    pointer-events: none;
+  }
+
+  .frame::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 20px; right: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(100, 200, 220, 0.3), transparent);
+  }
+
+  /* HUD panels */
+  .hud {
+    position: fixed;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  /* Top left — system label */
+  .hud-top-left {
+    top: 20px;
+    left: 24px;
+  }
+
+  .hud-top-left .sys-label {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 4px;
+    color: rgba(100, 180, 200, 0.55);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .hud-top-left .title {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 6px;
+    color: rgba(140, 220, 240, 0.9);
+    text-transform: uppercase;
+  }
+
+  .hud-top-left .subtitle {
+    font-size: 13px;
+    color: rgba(100, 180, 200, 0.5);
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+
+  /* Left panel — stratum readout */
+  .hud-left {
+    top: 100px;
+    left: 24px;
+    width: 180px;
+  }
+
+  .stratum-list {
+    list-style: none;
+  }
+
+  .stratum-item {
+    padding: 5px 10px;
+    margin: 3px 0;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    border-left: 2px solid rgba(100, 180, 200, 0.15);
+    color: rgba(100, 180, 200, 0.5);
+    transition: all 0.3s;
+    cursor: pointer;
+    pointer-events: all;
+  }
+
+  .stratum-item:hover, .stratum-item.active {
+    border-left-color: rgba(140, 220, 240, 0.8);
+    color: rgba(140, 220, 240, 0.95);
+    background: rgba(100, 180, 200, 0.07);
+  }
+
+  .stratum-item .depth {
+    color: rgba(100, 180, 200, 0.35);
+    margin-right: 8px;
+  }
+
+  /* Right panel — analysis data */
+  .hud-right {
+    top: 100px;
+    right: 24px;
+    width: 260px;
+    text-align: right;
+  }
+
+  .analysis-panel {
+    background: rgba(10, 20, 30, 0.7);
+    border: 1px solid rgba(100, 180, 200, 0.15);
+    padding: 16px 18px;
+    font-size: 12px;
+    line-height: 1.9;
+    letter-spacing: 1px;
+    opacity: 0;
+    transition: opacity 0.4s;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    pointer-events: all;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 180, 200, 0.2) transparent;
+  }
+
+  .analysis-panel.visible { opacity: 1; }
+
+  .analysis-panel .panel-title {
+    color: rgba(140, 220, 240, 0.7);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(100, 180, 200, 0.15);
+  }
+
+  .analysis-panel .row {
+    display: flex;
+    justify-content: space-between;
+    color: rgba(100, 180, 200, 0.6);
+  }
+
+  .analysis-panel .row .val {
+    color: rgba(160, 230, 245, 0.9);
+    font-weight: 500;
+  }
+
+  .analysis-panel .bar-container {
+    margin: 6px 0;
+    height: 4px;
+    background: rgba(100, 180, 200, 0.1);
+    position: relative;
+  }
+
+  .analysis-panel .bar-fill {
+    height: 100%;
+    transition: width 0.5s;
+  }
+
+  .cat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 0;
+  }
+
+  .cat-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 7px;
+    opacity: 0.8;
+  }
+
+  .cat-label {
+    color: rgba(100, 180, 200, 0.6);
+    font-size: 11px;
+    flex: 1;
+    text-align: left;
+    display: flex;
+    align-items: center;
+  }
+
+  .cat-val {
+    color: rgba(160, 230, 245, 0.85);
+    font-weight: 500;
+  }
+
+  /* Bottom status bar */
+  .hud-bottom {
+    bottom: 18px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    color: rgba(100, 180, 200, 0.4);
+    text-transform: uppercase;
+  }
+
+  .hud-bottom .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(100, 220, 180, 0.6);
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  /* Legend */
+  .hud-bottom-right {
+    bottom: 44px;
+    right: 24px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+  }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 4px 0;
+    color: rgba(100, 180, 200, 0.45);
+  }
+
+  .legend-swatch {
+    width: 16px;
+    height: 4px;
+    opacity: 0.7;
+  }
+
+  /* Depth indicator on right */
+  .depth-scale {
+    position: fixed;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .depth-tick {
+    font-size: 10px;
+    color: rgba(100, 180, 200, 0.3);
+    letter-spacing: 1px;
+    text-align: right;
+    padding: 8px 0;
+  }
+
+  /* Instructions */
+  /* Task tooltip */
+  .task-tooltip {
+    position: fixed;
+    z-index: 30;
+    background: rgba(8, 16, 24, 0.92);
+    border: 1px solid rgba(100, 220, 220, 0.4);
+    padding: 12px 16px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: rgba(160, 230, 245, 0.9);
+    max-width: 300px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s;
+    box-shadow: 0 0 24px rgba(60, 180, 200, 0.12);
+  }
+
+  .task-tooltip.visible { opacity: 1; }
+
+  .task-tooltip .tt-status {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+
+  .task-tooltip .tt-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgba(200, 240, 250, 0.95);
+  }
+
+  .task-tooltip .tt-cat {
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-top: 5px;
+    text-transform: uppercase;
+  }
+
+  .instructions {
+    position: fixed;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: rgba(100, 180, 200, 0.35);
+    text-transform: uppercase;
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 2s;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="flicker"></div>
+<div class="frame"></div>
+
+<!-- HUD: Top Left -->
+<div class="hud hud-top-left">
+  <div class="sys-label">System Monitor</div>
+  <div class="title">Core Sample</div>
+  <div class="subtitle">Stratum Analysis // Jul 2023 &ndash; Mar 2026</div>
+</div>
+
+<!-- HUD: Left — Stratum List -->
+<div class="hud hud-left">
+  <ul class="stratum-list" id="stratum-list"></ul>
+</div>
+
+<!-- HUD: Right — Analysis Panel -->
+<div class="hud hud-right">
+  <div class="analysis-panel" id="analysis-panel">
+    <div class="panel-title">Stratum Analysis</div>
+    <div id="analysis-content">
+      <div style="color:rgba(100,180,200,0.3); text-align:center; padding: 20px 0;">
+        SELECT A STRATUM
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HUD: Bottom -->
+<div class="hud hud-bottom">
+  <div><span class="status-dot"></span>Analysis Active &mdash; 208 Days Sampled</div>
+  <div>866 Specimens Catalogued // Completion Index: 44.7%</div>
+</div>
+
+<!-- HUD: Bottom Right Legend -->
+<div class="hud hud-bottom-right" id="legend-panel"></div>
+
+<!-- Task tooltip with leader line -->
+<svg id="leader-svg" style="position:fixed;inset:0;z-index:25;pointer-events:none;width:100%;height:100%;">
+  <line id="leader-line" x1="0" y1="0" x2="0" y2="0" stroke="rgba(100,220,220,0.5)" stroke-width="1" stroke-dasharray="4,3" />
+</svg>
+<div id="task-tooltip" class="task-tooltip"></div>
+
+<div class="instructions" id="instructions">
+  Drag to orbit &middot; Scroll to zoom &middot; Click stratum to analyze
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ===== DATA =====
+const CATS = {
+  work:      { color: new THREE.Color(0.91, 0.66, 0.22), hex: '#e8a838', label: 'WORK' },
+  code:      { color: new THREE.Color(0.31, 0.66, 0.88), hex: '#4fa8e0', label: 'CODE' },
+  household: { color: new THREE.Color(0.49, 0.81, 0.54), hex: '#7ecf8a', label: 'HOUSEHOLD' },
+  social:    { color: new THREE.Color(0.91, 0.39, 0.47), hex: '#e86478', label: 'SOCIAL' },
+  finance:   { color: new THREE.Color(0.79, 0.71, 0.31), hex: '#c9b64f', label: 'FINANCE' },
+  personal:  { color: new THREE.Color(0.79, 0.49, 0.86), hex: '#c97edb', label: 'PERSONAL' },
+  admin:     { color: new THREE.Color(0.54, 0.62, 0.67), hex: '#8a9faa', label: 'ADMIN' }
+};
+
+const catOrder = ['work', 'code', 'household', 'social', 'finance', 'personal', 'admin'];
+
+// Inline data
+const RAW_DATA = {
+  "days": [
+    {
+      "date": "2023-07-19",
+      "tasks": [
+        {
+          "text": "Apply to a job (or two)",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Hang out with R.",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2023-07-20",
+      "tasks": [
+        {
+          "text": "apply to a job",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "code",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "fill out DDOT Remimagined feedback form",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2023-07-21",
+      "tasks": [
+        {
+          "text": "Grocery shopping",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Code",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Apply to a job",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Bath (?)",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-07-22",
+      "tasks": [
+        {
+          "text": "Buy weed",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Make adobo with the chicken that has been defrosting since yesterday",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-07-24",
+      "tasks": [
+        {
+          "text": "Transfer $ to bank account",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Change delivery info for package",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Find more jobs to apply for",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Look at the Github stuff E. sent me.",
+          "completed": false,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2023-07-28",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Pack for Kalamazoo",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Clean Apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Shower",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-01",
+      "tasks": [
+        {
+          "text": "Remove nail polish",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Run dishwasher",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Reply to [client org]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Fold laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Begin recording R. birthday present",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Prioritize exercise",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Adjust morning routine",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Make more food",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-02",
+      "tasks": [
+        {
+          "text": "R. podcast",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "E. code",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Personal code",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Book project",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean / tidy apartment",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-03",
+      "tasks": [
+        {
+          "text": "Code code code (small bookstore)",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Record R. podcast",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Some kind of exercise",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-04",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Run dishwasher",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Shower",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Pick up Blue Gatorade",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Wipe down bathroom sink and mirrors",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Buy grinder?",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-08",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Wash",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Dry",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Fold",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Code",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Run dishwasher",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Read up on how to make lumpia",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Mental health walk / mild stretching",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-09",
+      "tasks": [
+        {
+          "text": "Groceries",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Buy bread",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy lumpia ingredients (?)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Buy lunch meat",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Flutter / code",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Bath",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-10",
+      "tasks": [
+        {
+          "text": "Run dishwasher",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make an issue for the AI project I'm doing with E.",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Flutter videos",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Configure homepage domain",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-12",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Edit photos and publish Fiverr gig",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-14",
+      "tasks": [
+        {
+          "text": "Grocery",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Publish Fiverr gig",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Write [client org] Proposal",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-19",
+      "tasks": [
+        {
+          "text": "Restock groceries",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Sign contract w/ [client org]",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-20",
+      "tasks": [
+        {
+          "text": "Grocery shopping",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Cancel Live2D",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "finalize R. Birthday present",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "sign [client org] contract",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "pay outstanding medical bill",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "prepare for R. visit",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Resume coursera",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-21",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Make lunch",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "[client org] contract",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "[client org] Invoice",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-25",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Clean bathroom",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Wipe stove",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean kitchen",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Shower",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Play around with Playdate gamer maker",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-28",
+      "tasks": [
+        {
+          "text": "[tattoo shop] (Nose Ring Appointment)",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Begin [client org] work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Pay outstanding medical bill",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Pack for Illinois trip",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "R. B-Day Present Solidified (do this on wednesday)",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-29",
+      "tasks": [
+        {
+          "text": "Buy bread, among other things",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cook, maybe dinner can fuel leftovers tomorrow",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Research Detroit Data Art Competition",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Begin [client org]",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-30",
+      "tasks": [
+        {
+          "text": "Finish R. birthday present",
+          "completed": true,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2023-08-31",
+      "tasks": [
+        {
+          "text": "Work on R. birthday present",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Pay outstanding medical bill",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Check [benefits account] balance",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Shave",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-08",
+      "tasks": [
+        {
+          "text": "[client org] (high priority)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery shop (high priority)",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Coursera (medium priority)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Detroit Data Visualization (low priority)",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-10",
+      "tasks": [
+        {
+          "text": "[client org]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery Shopping",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Tidy Apartment",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-13",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "[client org]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Data Viz",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery Shopping",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Enter [restaurant] Hours",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-14",
+      "tasks": [
+        {
+          "text": "finish [client org] draft",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "assemble data viz thing",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-16",
+      "tasks": [
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Meal prep",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Bath (?)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-19",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Meet w/ L.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make invoice for [client org]",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-20",
+      "tasks": [
+        {
+          "text": "grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "meal prep",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "buy weed",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "make mp invoice",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "draft project overview for [coffee client]",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-21",
+      "tasks": [
+        {
+          "text": "Email Sa.",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Draft Proposal for [coffee client]",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-22",
+      "tasks": [
+        {
+          "text": "Write",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "E-mail L. the Contracts",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Clean apartment in preparation for R.",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-24",
+      "tasks": [
+        {
+          "text": "[client org] Presentation",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Prepare for [coffee client]",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Transfer buffer money for rent",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Detroit Data Viz",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Morning pages",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-25",
+      "tasks": [
+        {
+          "text": "[client org] Work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Start [coffee client] Work",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-28",
+      "tasks": [
+        {
+          "text": "[client org] (DUE TOMORROW)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery shopping",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-29",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Work",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-01",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cook chicken",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clean bong",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-02",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Prepare for [coffee client]",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Laundry (?)",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "More Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Soil test for the worm boys",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Creative time, writing",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Poker!",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-03",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Soil Test",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Eat better",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-05",
+      "tasks": [
+        {
+          "text": "Morning pages",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Apply for jobs (?)",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Meal prep",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery shop (?)",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Poker",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-07",
+      "tasks": [
+        {
+          "text": "K. card, croissant",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Swiffer Floor",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Job apps",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-08",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Groceries",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Read \"Anna Karenina\"",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean Apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Apply for job",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-10",
+      "tasks": [
+        {
+          "text": "[client org] Work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Confirm w/ L. about tomorrow",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy Amtrak Ticket",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-11",
+      "tasks": [
+        {
+          "text": "[coffee client]",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Grocery Shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "K. Goodbye Pt. 2",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-12",
+      "tasks": [
+        {
+          "text": "[client org] work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Apply for job (?)",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Meal prep",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-14",
+      "tasks": [
+        {
+          "text": "Long day at work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Capstone!",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-15",
+      "tasks": [
+        {
+          "text": "Make salad",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Buy ingredients",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Tidy apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clean bathroom",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Mop living room",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Do dishes",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Schedule invoice email for L.",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-16",
+      "tasks": [
+        {
+          "text": "Where am I going to do my fucking call tomorrow",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Google Sheet for TikTok Scheduling / Ideation",
+          "completed": true,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-17",
+      "tasks": [
+        {
+          "text": "[client org] presentation",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-24",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "[tidy up]",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Rewrite Resume",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Apply for job",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Prepare [coffee client] Materials",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-26",
+      "tasks": [
+        {
+          "text": "Apply for data analyst job",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Solve Gmail filters problem",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Pozole",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-27",
+      "tasks": [
+        {
+          "text": "Apply to Data Analyst Job",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Reply to [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-29",
+      "tasks": [
+        {
+          "text": "Figure out what I ma doing with [cafe workplace]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Prep for Data Analyst Interview",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Pay rent as soon as possible",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Nanowrimo Kickoff!",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-10-30",
+      "tasks": [
+        {
+          "text": "Honestly, um, nothing?",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-01",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Grocery shopping",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Client work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Write",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Tidy Apartment",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-09",
+      "tasks": [
+        {
+          "text": "Read handbook",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[cafe workplace]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Detroit Red Wings",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-13",
+      "tasks": [
+        {
+          "text": "Thanksgiving Prep",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Sort out Healthcare stuff",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-14",
+      "tasks": [
+        {
+          "text": "Lunch w/ R.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Hang w/ J.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Write",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Pick Up [medication]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Sort Out Healthcare",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-16",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-18",
+      "tasks": [
+        {
+          "text": "Grocery Shop",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-11-24",
+      "tasks": [
+        {
+          "text": "Pay energy bill",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Begin renewing healthcare stuff",
+          "completed": true,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2023-12-13",
+      "tasks": [
+        {
+          "text": "Film test w/ R.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Send Christmas gifts",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Rest",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Maybe grocery shop",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2023-12-27",
+      "tasks": [
+        {
+          "text": "Pay Health insurance premium",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Pay DTE",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Write Goals for 2024",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Dishes",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Shower",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-03",
+      "tasks": [
+        {
+          "text": "Email [client org]",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Get Haircut",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Talk to [cafe workplace]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Shower",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Maybe Grocery Shop",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Bonus: Meal Prep",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-11",
+      "tasks": [
+        {
+          "text": "buy treats",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "buy bread",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "buy APEs",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "read",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "prep materials for teaching class at [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "tidy",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-12",
+      "tasks": [
+        {
+          "text": "Talk to Al.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Think about bloggo to write tomorrow",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Draft up answers to [client org] e-mail",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-16",
+      "tasks": [
+        {
+          "text": "Email [client org]",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Ask [cafe workplace] for tomorrow's script",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Tell P. I can't take their shift next week.",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-17",
+      "tasks": [
+        {
+          "text": "Grocery w/ L.",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "[cafe workplace] TV Spot",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Work on [cafe workplace] Courses to send to Al.",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Look over the year, maybe set some short term and long term goals.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Get wine glasses from Li.",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-18",
+      "tasks": [
+        {
+          "text": "Go to CVS Pharmacy to get meds",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Coffee w/ A.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "[restaurant]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Read Anna K",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-20",
+      "tasks": [
+        {
+          "text": "Update my website to include my data analytics certification",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Read Anna Karenina",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Take a look at the email Al. sent me",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-22",
+      "tasks": [
+        {
+          "text": "Book hotel for Z. & Sh.'s wedding",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Research and ophthalmologist",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-23",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Activate debit card",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Bath / shower",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "True Detective!",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Book Las Vegas Hotel",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cioppino",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Email [client org]",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "[cafe workplace] Class Paperwork",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Buy instant rice",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Buy a baguette",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-24",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Bath / shower",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Book Las Vegas Hotel",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cioppino",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Email [client org]",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "[cafe workplace] Class Paperwork",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Buy instant rice",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Buy a baguette",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Pay dental bill",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Pay utilities",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-25",
+      "tasks": [
+        {
+          "text": "Read Anna K",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery shop (?)",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Update website",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Dinner w/ N.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Karaoke!",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Find a frame at [store]",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-01-26",
+      "tasks": [
+        {
+          "text": "[data org] Meeting (!!)",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Work @ [cafe workplace]",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Read Anna K",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Whatever else I can manage",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Meeting w/ Al. about poetry class",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-02",
+      "tasks": [
+        {
+          "text": "Pay Verizon",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Input [restaurant] Schedule",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Photos for [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Project Outline for [client org]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery (?)",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-04",
+      "tasks": [
+        {
+          "text": "Light grocery at Whole Foods",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Check out Na.'s Apartment (?)",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[client org] / [cafe workplace] Work (Bonus)",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-06",
+      "tasks": [
+        {
+          "text": "Write [cafe workplace] instructor bio",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-07",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Grocery Shop",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Poker",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Research Las Vegas Hotel",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Hardware store (buy bucket, hex head)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Email L.L.",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-08",
+      "tasks": [
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Dinner for friends",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Buy Weed (?)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Karaoke",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Mop Entryway",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Puzzle stuff!",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Book Vegas Hotel",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-13",
+      "tasks": [
+        {
+          "text": "MP Work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "[cafe workplace] Class Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Email L.L.",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-15",
+      "tasks": [
+        {
+          "text": "Light grocery",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Knit w/ A.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Karaoke",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Work at [restaurant]",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-18",
+      "tasks": [
+        {
+          "text": "Kanban for [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Kanban for [client org]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Exercise",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-19",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Call ophthalmologist",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "MP Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Buy sour cream / ground beef",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-21",
+      "tasks": [
+        {
+          "text": "Make Discord for [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "[client org] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Project Monotub w/ L.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-22",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Hang out w/ A.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Karaoke",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "MP Outline",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy weed",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Buy stepladder",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy dehydrator",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-23",
+      "tasks": [
+        {
+          "text": "Return R.'s keys",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy weed (?)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-26",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-02-28",
+      "tasks": [
+        {
+          "text": "[cafe workplace] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Haircut",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery (?)",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Read lease",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Pay electric bill",
+          "completed": false,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-01",
+      "tasks": [
+        {
+          "text": "Pay electric bill",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Get authorization for ophthalmologist",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[client org]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[cafe workplace] Classes",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Taxes",
+          "completed": false,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-07",
+      "tasks": [
+        {
+          "text": "Ophthalmologist Authorization",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Renter's Insurance Quote",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Begin Taxes",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Clean Apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Plan Work for Classes",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Grocery (?)",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Buy Weed (?)",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-09",
+      "tasks": [
+        {
+          "text": "Make plans for Project Grizzly",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean kitchen",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-11",
+      "tasks": [
+        {
+          "text": "Buy renter's insurance",
+          "completed": true,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-12",
+      "tasks": [
+        {
+          "text": "[restaurant] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Hang Out w/ N.C.!",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-13",
+      "tasks": [
+        {
+          "text": "Taxes",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "[client org]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Belle Isle w/ N.C.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Project Grizzly w/ L.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-14",
+      "tasks": [
+        {
+          "text": "Class Prep",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Taxes",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Karaoke (?) w/ N.C.",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-15",
+      "tasks": [
+        {
+          "text": "Pay health insurance premium",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Pick up shoes from CVS",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-16",
+      "tasks": [
+        {
+          "text": "[client org] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Get through my [cafe workplace] shift",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Maybe bath",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Text J. about maybe getting food tomorrow ?",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-17",
+      "tasks": [
+        {
+          "text": "Make stroganoff",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make ham & bire (?)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Take a look at work to be done this week",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "mmmpage for PowerPoint Party",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Buy paper towels, bread knife",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Confirm chalazion appointment authorization",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Complete client work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Prepare for [cafe workplace] classes",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Grocery",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-18",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Make sandwiches",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make logo",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Run dishwasher",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy weed",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-19",
+      "tasks": [
+        {
+          "text": "Fold laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Game plan for [cafe workplace] and MP Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Bath",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-20",
+      "tasks": [
+        {
+          "text": "[client org]'s Presentation (Use Outline)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "[cafe workplace] Class Prep",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery Shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clean kitchen",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Powerpoint party prep",
+          "completed": true,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-21",
+      "tasks": [
+        {
+          "text": "Prep [client org] stuff to send out tomorrow",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-03-31",
+      "tasks": [
+        {
+          "text": "[restaurant] Work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Pay Rent",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Prepare for Poetry Class",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Prepare for Television Spot",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "FINISH [CLIENT ORG] WORK",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Think through sandwich logistics",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Code",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Roblox",
+          "completed": false,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-10",
+      "tasks": [
+        {
+          "text": "Send poetry follow-up email",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Return my Uniqlo pants",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Haircut",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Hang w/ K.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Fucking Taxes",
+          "completed": false,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-11",
+      "tasks": [
+        {
+          "text": "Taxes",
+          "completed": false,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-14",
+      "tasks": [
+        {
+          "text": "Grocery w/ W.",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Do [client org] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Sort through taxes and understand what I need to do",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "[restaurant] work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Find a rhythm to keep kitchen clean",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Write out a plan to improve finances",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Make a business plan for \"[sandwich business]\"",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Host my poetry workshop",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-15",
+      "tasks": [
+        {
+          "text": "[client org]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Taxes",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Pick up meds",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-17",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clean kitchen",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Pick up [medication]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Poetry workshop",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Hang w/ T.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Work on my book",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Re-evaluate budget",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Figure out [sandwich business] licenses",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-18",
+      "tasks": [
+        {
+          "text": "Re-evaluate budget",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Work on book",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Figure out sandwich numbers",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-21",
+      "tasks": [
+        {
+          "text": "[client org] work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Sandwich prep",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-24",
+      "tasks": [
+        {
+          "text": "Hang w/ L.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Costco w/ W.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "[sandwich business] paperwork",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Drive (?)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-04-26",
+      "tasks": [
+        {
+          "text": "Send invoice",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Fold laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Healthcare payment",
+          "completed": false,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-01",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Work on book",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Cigars",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-02",
+      "tasks": [
+        {
+          "text": "Buy weed (get infused)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Relaxing bath",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Movie (A Sign of Affection)",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-03",
+      "tasks": [
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Examine professional internet presence",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "[sandwich business] progress",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-08",
+      "tasks": [
+        {
+          "text": "Email [client org] (?)",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Hang w/ A.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "[sandwich business] LLC",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Buy weed",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Book Cincinatti",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Grocery run for dinner items",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Slideshow Party Prep",
+          "completed": true,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-09",
+      "tasks": [
+        {
+          "text": "[venue] photo shoot w/ S.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Buy weed",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-10",
+      "tasks": [
+        {
+          "text": "Freeze stock",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Mail registered agent stuff",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Contact post office about my mail",
+          "completed": true,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-12",
+      "tasks": [
+        {
+          "text": "Sort our registered agent stuff",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Figure out how much L. owes me",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Prepare clothes for wedding",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Figure out my ride to and from the wedding",
+          "completed": false,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-16",
+      "tasks": [
+        {
+          "text": "Pick up those shoe boxes from [cafe workplace]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Haircut",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-17",
+      "tasks": [
+        {
+          "text": "Haircut",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Prep wedding outfit",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Movie w/ L.",
+          "completed": true,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-18",
+      "tasks": [
+        {
+          "text": "Sandwiches!",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Wedding",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Work on professional internet presence",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "[bank]",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-20",
+      "tasks": [
+        {
+          "text": "Meeting w/ A.",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Professional Website",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Book swamp tours",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "DBA paperwork",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Order deli paper",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Start business checking",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Prepare work Saturday's workshop",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Challengers w/ L. (?)",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-21",
+      "tasks": [
+        {
+          "text": "Work on PowerPoint",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Make [sandwich business] Board",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Figure out FAFP formatting",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-22",
+      "tasks": [
+        {
+          "text": "Meeting w/ R.",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "[sandwich business] DBA paperwork",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Reminder text / message for Slideshow Party",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Figure out how to get ServSafe or whatever",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Email updated manuscript to M.",
+          "completed": true,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-23",
+      "tasks": [
+        {
+          "text": "Log [sandwich business] expenses",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "N.'s Party",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Work on Slideshow",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Send out DBA",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Come up with menu for upcoming pop ups",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-24",
+      "tasks": [
+        {
+          "text": "Grocery shopping",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-27",
+      "tasks": [
+        {
+          "text": "email Ju. ([venue])",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Finish Slideshow",
+          "completed": false,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-28",
+      "tasks": [
+        {
+          "text": "Cancel Chalazion appointment",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Trivia",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[venue] Email",
+          "completed": true,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-29",
+      "tasks": [
+        {
+          "text": "Practice / Time my slideshow",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Make sandwiches",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Get haircut",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery shop w/ S.",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-05-30",
+      "tasks": [
+        {
+          "text": "Write",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clean Apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Pick up things from [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Buy vape",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Plan meals for road trip",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Review FAFP",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-06-02",
+      "tasks": [
+        {
+          "text": "Assemble snacks and meals",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write out food plan",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Start packing",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-06-14",
+      "tasks": [
+        {
+          "text": "[sandwich business] Prep",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery Shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Get my key from Cu.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Build chair",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write reviews for trip",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Export Spotify data",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-06-27",
+      "tasks": [
+        {
+          "text": "Pick up chicken from [restaurant]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "DIA (?)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[bar]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "[sandwich business] prep",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Set up Square",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Prepare for Poetry workshop",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-06",
+      "tasks": [
+        {
+          "text": "Clean out fridge",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Get sandwich stuff from [restaurant]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Make menu for [sandwich business]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Fold laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Pay health insurance premium",
+          "completed": true,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-07",
+      "tasks": [
+        {
+          "text": "Prep for Sandwiches",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Prep for Vegas",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-15",
+      "tasks": [
+        {
+          "text": "Figure out my job situation",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Coaching w/ L.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Email [store]",
+          "completed": true,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-18",
+      "tasks": [
+        {
+          "text": "Job hunt",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-19",
+      "tasks": [
+        {
+          "text": "Fold laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Job hunt",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Buy plane tickets",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-22",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Menu for [restaurant] tomorrow",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Job hunt",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-27",
+      "tasks": [
+        {
+          "text": "Prep for poetry class",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Fix glasses",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Get vase for flowers",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-29",
+      "tasks": [
+        {
+          "text": "clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "buy glasses",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "buy weed",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "bath",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[bar] (?)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "meal prep",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-07-30",
+      "tasks": [
+        {
+          "text": "[restaurant] shift",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-08-02",
+      "tasks": [
+        {
+          "text": "Examine health insurance bill",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Examine DTE bill",
+          "completed": true,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2024-08-04",
+      "tasks": [
+        {
+          "text": "[restaurant]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Rest",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Content w/ A.",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-08-05",
+      "tasks": [
+        {
+          "text": "Grocery",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Laundry",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Content w/ A.",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-08-07",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "A.'s Reels",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Get tips / advance",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-08-12",
+      "tasks": [
+        {
+          "text": "[restaurant] Shift",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-08-17",
+      "tasks": [
+        {
+          "text": "Eastern Market",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "[cafe workplace] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Movie w/ B.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Buy shoes",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Schedule haircut",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2024-09-11",
+      "tasks": [
+        {
+          "text": "Buy toilet paper, omg",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clearly identify a problem and provide and obvious solution.",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Write a list of potential focus areas.",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-09-24",
+      "tasks": [
+        {
+          "text": "Pay health insurance bill",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Buy Super Birkis",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Write intro for poetry book",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-10-04",
+      "tasks": [
+        {
+          "text": "[cafe workplace] Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "[dispensary] (pick up edibles)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-10-12",
+      "tasks": [
+        {
+          "text": "Prep for N.'s birthday",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Grocery shopping",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2024-10-17",
+      "tasks": [
+        {
+          "text": "Pick up [medication]",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2024-12-19",
+      "tasks": [
+        {
+          "text": "Grocery shop",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Coffee w/ G.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Work @ [cafe workplace]",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Christmas gifts for [cafe workplace] (?)",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Career plan 2025",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2024-12-29",
+      "tasks": [
+        {
+          "text": "Prep for NYE party",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Resolutions",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Tidy",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-01",
+      "tasks": [
+        {
+          "text": "Buy weed",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Cook chicken",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Review budget",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-02",
+      "tasks": [
+        {
+          "text": "Return iPhone to Verizon",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Pick up more ingredients for paella",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "DJ",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Talk to Ja.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "[cafe workplace] Prep work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Dishes",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-03",
+      "tasks": [
+        {
+          "text": "Maybe try Verizon again today after work",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "tried! but they wouldn't take it - they suggested i mail my phone in.",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Invite L. over for movie!",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Text Ly. about dinner tmrw (?)",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Pick up sandwich materials",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-05",
+      "tasks": [
+        {
+          "text": "Get baguettes",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make sandwiches",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Do laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Hacker hour",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-07",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Get label to return phone (?)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "'Anora' w/ La. tmrw (?)",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Dinner w/ Ly. this weekend",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Date w/ M.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Dinner w/ C.",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-08",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Talk to W.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery Shop (?)",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-11",
+      "tasks": [
+        {
+          "text": "[sandwich business] grocery run",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "[sandwich business] social post",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-12",
+      "tasks": [
+        {
+          "text": "Clean kitchen",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Pick up bread",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Restaurant supply shopping list",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Sandwich prep / fulfillment",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Did we want to pick up ceramicware tomorrow?",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Can I get login credentials for [supplier] plz?",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-14",
+      "tasks": [
+        {
+          "text": "Clean kitchen",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Ciabatta bread order",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make pulled pork sando line item",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Schedule time with Am.",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Set up laptop",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean utility closet",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-16",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Pork Butt",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-18",
+      "tasks": [
+        {
+          "text": "Slaw for sandos",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Lions game",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Work",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "ServSafe if you can squirrel away a moment",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-19",
+      "tasks": [
+        {
+          "text": "Make sandwiches",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make dinner for W., Cl. (Columbo)",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Begin search for used coffee equipment",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Write!",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Read!",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Pull on coffee contacts for used coffee equipment",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-20",
+      "tasks": [
+        {
+          "text": "Laundry (?)",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "[cafe workplace] Email",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Buy weed (?)",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-21",
+      "tasks": [
+        {
+          "text": "Buy weed",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grinder w/ W.",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "ServSafe (?)",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Patch on Jacket",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-22",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Am.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Write",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Read",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-23",
+      "tasks": [
+        {
+          "text": "[sandwich business] line item",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Milk sourcing",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-26",
+      "tasks": [
+        {
+          "text": "Sandwiches",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Barcade",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make dinner (?)",
+          "completed": true,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-27",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Coffee Order",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Rest",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Bath",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-28",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Brunch w/ W. n Cl.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Movie w/ L.",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-29",
+      "tasks": [
+        {
+          "text": "Bath",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Buy weed",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Pick up books @ [cafe workplace]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cake @ [cafe workplace] 5pm",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-30",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Basement move at [cafe workplace]",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-01-31",
+      "tasks": [
+        {
+          "text": "Pay rent",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "Pay healthcare",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Pay Verizon",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-01",
+      "tasks": [
+        {
+          "text": "Activate [cafe workplace] company card",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Figure out advance or salary or rent",
+          "completed": true,
+          "category": "finance"
+        },
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Restaurant Paperwork (SOP, etc.)",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Pay invoice to [org]",
+          "completed": true,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-02",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Sandwich Prep",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Sandwich Sales",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "HackerTime",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-03",
+      "tasks": [
+        {
+          "text": "Breakfast w/ J.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery w/ W.",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Buy TP, buy Dayquil",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "ServSafe (?)",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-04",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cafe Food Prep",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clear Table",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-06",
+      "tasks": [
+        {
+          "text": "ServSafe",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Knit Night",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make Soup",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Movie Night w/ La.",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-07",
+      "tasks": [
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "O.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Renew LLC",
+          "completed": true,
+          "category": "admin"
+        },
+        {
+          "text": "Schedule ServSafe Exam",
+          "completed": false,
+          "category": "admin"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-08",
+      "tasks": [
+        {
+          "text": "Sando prep",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-12",
+      "tasks": [
+        {
+          "text": "La. BDay Gift",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Haircut",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Clean [cafe workplace] Bathrooms",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Draft up reference materials",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-16",
+      "tasks": [
+        {
+          "text": "Sandwiches",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "[cafe workplace] Work",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-18",
+      "tasks": [
+        {
+          "text": "Close Register",
+          "completed": false,
+          "category": "admin"
+        },
+        {
+          "text": "Make chai",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Make ServSafe flashcards",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery shop",
+          "completed": true,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-19",
+      "tasks": [
+        {
+          "text": "Need advance",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Make cold brew",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Assess syrups",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Haircut",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-20",
+      "tasks": [
+        {
+          "text": "Call Pastry Reps",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Knit Night",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Prep for Friends Arrival",
+          "completed": false,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-21",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-23",
+      "tasks": [
+        {
+          "text": "Make sandwiches",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Sell sandwiches",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Work",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2025-02-24",
+      "tasks": [
+        {
+          "text": "Make music",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Tidy up for C.",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "DJ",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Cook dinner",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-03-03",
+      "tasks": [
+        {
+          "text": "Breakfast w/ J.",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Hang w/ L.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Costco Run w/ C.",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-03-06",
+      "tasks": [
+        {
+          "text": "Gluten-Free BLT",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-03-07",
+      "tasks": [
+        {
+          "text": "Dinner Prep for L.",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "buy chicken, chard",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Feed sourdough starter",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-03-10",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2025-03-11",
+      "tasks": [
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Meal prep",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-04-14",
+      "tasks": [
+        {
+          "text": "File my taxes before Oct. 15 (easy)",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Research what a tax payment plan looks like (easy)",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Sign up for a tax payment plan with the IRS (moderate)",
+          "completed": false,
+          "category": "finance"
+        }
+      ]
+    },
+    {
+      "date": "2025-04-26",
+      "tasks": [
+        {
+          "text": "File my taxes",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Rearrange office, add rug",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2025-07-21",
+      "tasks": [
+        {
+          "text": "Cybersecurity Course",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Yoga",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Grocery Shopping",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "[cafe workplace] errands",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Write copy for HTML Day",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Laundry",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Clean kitchen",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Clean bathroom",
+          "completed": true,
+          "category": "household"
+        },
+        {
+          "text": "Prepare to record podcast with B.",
+          "completed": true,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2026-02-02",
+      "tasks": [
+        {
+          "text": "Buy booze",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Work on David",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Clean apartment",
+          "completed": false,
+          "category": "household"
+        },
+        {
+          "text": "Design lawyer cards",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Give S. my Nintendo switch friend code",
+          "completed": false,
+          "category": "code"
+        }
+      ]
+    },
+    {
+      "date": "2026-02-10",
+      "tasks": [
+        {
+          "text": "Sign La. Birthday card",
+          "completed": false,
+          "category": "social"
+        },
+        {
+          "text": "Wrap gift stickers",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Get flower",
+          "completed": false,
+          "category": "personal"
+        }
+      ]
+    },
+    {
+      "date": "2026-02-23",
+      "tasks": [
+        {
+          "text": "Make soup",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Find tax document",
+          "completed": false,
+          "category": "finance"
+        },
+        {
+          "text": "Clean bathroom",
+          "completed": false,
+          "category": "household"
+        }
+      ]
+    },
+    {
+      "date": "2026-03-14",
+      "tasks": [
+        {
+          "text": "[legal errand]",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Apply for jobs",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Upwork",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Continue Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Start bidding on Upwork Jobs",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Hit up Ma. & Li. about babysitting, dog watching",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Little Women Brunch",
+          "completed": true,
+          "category": "social"
+        }
+      ]
+    },
+    {
+      "date": "2026-03-16",
+      "tasks": [
+        {
+          "text": "Coursera",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Bid on Upwork",
+          "completed": true,
+          "category": "work"
+        },
+        {
+          "text": "Call Ca.",
+          "completed": true,
+          "category": "social"
+        },
+        {
+          "text": "Bear Blog Post",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Apply to Apple Store?",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    },
+    {
+      "date": "2026-03-17",
+      "tasks": [
+        {
+          "text": "Shower",
+          "completed": true,
+          "category": "personal"
+        },
+        {
+          "text": "Apple Store Resume",
+          "completed": false,
+          "category": "work"
+        },
+        {
+          "text": "Roblox Dev",
+          "completed": true,
+          "category": "code"
+        },
+        {
+          "text": "Rive App",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "three.js",
+          "completed": false,
+          "category": "code"
+        },
+        {
+          "text": "Coursera",
+          "completed": false,
+          "category": "personal"
+        },
+        {
+          "text": "Upwork proposals",
+          "completed": false,
+          "category": "work"
+        }
+      ]
+    }
+  ]
+};
+
+const SUMMARIES = {
+  "2023-07": "A dense layer of career prospecting — repeated 'apply to a job' entries interspersed with grocery runs, coding, and adobo-making with defrosting chicken. Signs of a life in transition, packing for Kalamazoo, looking at Github stuff E. sent.",
+  "2023-08": "The self-improvement aspirations surface: 'Adjust morning routine,' 'Prioritize exercise.' You were recording a birthday present for R., learning Flutter, building a small bookstore project, researching lumpia recipes, and signing a contract with [client org]. A nose ring appointment at [tattoo shop], a Fiverr gig published, a Detroit Data Art Competition discovered — the sediment of someone assembling multiple income streams from scratch.",
+  "2023-09": "[client org] work intensifies — 'DUE TOMORROW' appears in all caps by month's end. Coursera persists as a near-daily aspiration, sometimes completed, often not. You were drafting proposals for [coffee client], entering [restaurant] hours, meeting with L., making invoices, doing yoga, and cleaning the apartment in preparation for R.'s visit. Morning pages make their first appearance.",
+  "2023-10": "A stratum of creative and professional cross-pollination: Coursera, [client org] presentations, [coffee client] prep, Anna Karenina, soil tests for 'the worm boys,' poker nights, and a TikTok scheduling spreadsheet. Data analyst job applications crystallize mid-month, a Nanowrimo kickoff looms, and one entry reads simply: 'Honestly, um, nothing?' Pozole was made. K. was said goodbye to, twice.",
+  "2023-11": "The record thins — fewer entries, wider gaps. Thanksgiving prep, lunches with R., hanging with J., picking up [medication], sorting out healthcare, a Red Wings game. You were writing through it. An energy bill paid on Thanksgiving Day itself, healthcare renewal finally begun. The laundry kept not getting done.",
+  "2023-12": "Near-dormant. Two entries across the entire month: a film test with R., Christmas gifts sent, and year-end bill paying — health insurance, DTE. 'Write Goals for 2024' sits unchecked. Rest was explicitly listed as a task, and completed.",
+  "2024-01": "A slow reawakening. You were reading Anna Karenina with determination, prepping materials for teaching a class at [cafe workplace], having coffee with A., booking hotels for Z. and Sh.'s wedding and Las Vegas. True Detective watched. Cioppino attempted. A debit card activated, a dental bill paid, a baguette purchased. [data org] meeting attended with double exclamation marks. Karaoke beckoned repeatedly.",
+  "2024-02": "The [cafe workplace]-and-[client org] double helix tightens — kanban boards created for both, Discord made for [cafe workplace], instructor bio written. You were doing yoga almost daily, researching Las Vegas hotels, buying a dehydrator and stepladder, launching 'Project Monotub' with L., going to karaoke, knitting with A., and playing poker. The lease needed reading. The ophthalmologist needed calling. The laundry carried over day after day after day.",
+  "2024-03": "Tax season arrives alongside a dizzying juggle: [client org] presentations, [cafe workplace] class prep, poetry workshops, a television spot, renter's insurance, ophthalmologist authorizations, and 'Project Grizzly' with L. Belle Isle with N.C. PowerPoint party prep. Stroganoff made. 'Think through sandwich logistics' — the first whisper of what will become [sandwich business]. FINISH [client org] WORK in all caps, and a stray 'Roblox' at the bottom of the list.",
+  "2024-04": "'Fucking Taxes' appears verbatim. You were hosting poetry workshops, working on your book, hanging with T., re-evaluating your budget, making a business plan for '[sandwich business],' figuring out sandwich licensing, and doing Costco runs with W. [medication] picked up. Uniqlo pants returned. The financial reckoning layer — write out a plan, figure out the numbers, find a rhythm.",
+  "2024-05": "[sandwich business] goes from concept to operational reality: DBA paperwork, ServSafe research, registered agent filings, Square setup, menu planning, expense logging, deli paper orders. Simultaneously, a wedding attended, a [venue] photo shoot with S., meetings with A. and R., a manuscript emailed to M., slideshow parties rehearsed. You booked swamp tours and planned meals for a road trip. The professional website went live.",
+  "2024-06": "Sparse but vivid — road trip packing, [sandwich business] prep, building a chair, writing reviews for the trip, exporting Spotify data. You were picking up chicken from [restaurant], setting up Square, preparing for a poetry workshop. The gap between early and late June suggests you were away, living rather than listing.",
+  "2024-07": "Sandwich empire and job uncertainty coexist: 'Figure out my job situation' alongside [sandwich business] menu planning, prep for Vegas, [restaurant] shifts, coaching with L., poetry class prep. You were buying plane tickets, fixing glasses, getting a vase for flowers. Job hunting appears three times. The [bar] question mark. A quiet undertone of recalibration.",
+  "2024-08": "[restaurant] shifts anchor the schedule now. You were examining health insurance and DTE bills with the specificity of someone watching every dollar, creating content with A., going to Eastern Market, seeing movies with B. [cafe workplace] work persists. The entries are fewer, the tasks more procedural — a life finding its new steady state.",
+  "2024-09": "'Buy toilet paper, omg' — urgency at its most primal. You were writing an intro for a poetry book, buying Super Birkis, paying health insurance, and attempting something ambitious: 'Clearly identify a problem and provide an obvious solution.' A month of recalibration expressed in three scattered entries.",
+  "2024-10": "Thin deposits: [cafe workplace] work, picking up edibles at [dispensary], prepping for N.'s birthday, picking up [medication]. Writing and yoga aspired to. A quiet month in the record, the kind where living happens between the lines.",
+  "2024-12": "Year-end bookending: coffee with G., work at [cafe workplace], Christmas gifts considered, and — pointedly — 'Career plan 2025.' NYE party prep, resolutions drafted, tidying up. The annual sedimentary layer of taking stock.",
+  "2025-01": "The cafe era erupts. You were making sandwiches constantly — baguettes, pulled pork, ciabatta bread orders, slaw. ServSafe study appears almost daily, rarely checked off, a persistent boulder in the stream. [cafe workplace] prep, basement moves, coffee equipment sourcing, grinder shopping with W. Social life dense: dates with M., movies with L. and La., dinners with Ly. and C., barcade outings, brunch with W. and Cl. Lions game watched. Paella ingredients acquired. A patch needed sewing on a jacket.",
+  "2025-02": "ServSafe finally conquered — studied, flashcarded, scheduled, passed. The cafe infrastructure solidifies: cold brew, chai, syrups assessed, pastry reps called, registers closed, restaurant SOPs written, LLC renewed. Sandwiches made and sold on a regular cadence now. Knit nights with the regulars. Music made. DJ aspirations. Dinner prepped for C. The advance needed, the rent figured out. A life that has found its shape, even if the apartment still needs cleaning.",
+  "2025-03": "Sourdough starter feeding, gluten-free BLT development, Costco runs, dinner prep for L. — the food work continues but the entries thin. Breakfast with J. The apartment, as ever, needs cleaning. A transitional quiet before the next phase.",
+  "2025-04": "Tax reckoning, deferred from 2024, finally confronted: 'File my taxes before Oct. 15 (easy),' research payment plans, sign up with the IRS. Office rearranged, rug added. Two entries, both administrative. The sound of someone clearing a backlog.",
+  "2025-07": "A single day's entry but it pulses with new energy: cybersecurity course, writing copy for HTML Day, podcast recording with B., [cafe workplace] errands, yoga, deep apartment cleaning. The code-and-community layer returns, refreshed.",
+  "2026-02": "Scattered but telling: working on something called 'David,' designing lawyer cards, giving S. a Nintendo Switch friend code, signing La.'s birthday card, wrapping gift stickers, making soup, hunting for tax documents, cleaning the bathroom. The sediment of midwinter domestic life with its small gestures of care.",
+  "2026-03": "The job search resurfaces with new tools and old determination: Upwork proposals, Coursera resumed, Apple Store application considered, Roblox dev, Rive App, three.js experiments. You served a [legal errand], attended a Little Women Brunch, called Ca., wrote a Bear Blog post. Hit up Ma. and Li. about babysitting and dog watching. Heavy coding crystallization alongside hustle-mode freelancing — the stratigraphy of someone rebuilding, again, with more skills than last time."
+};
+
+// Group by month
+const months = {};
+RAW_DATA.days.forEach(day => {
+  const key = day.date.slice(0, 7);
+  if (!months[key]) months[key] = { date: key, tasks: [], days: [] };
+  months[key].tasks.push(...day.tasks);
+  months[key].days.push(day);
+});
+
+// Newest on top (highest Y)
+const monthArr = Object.values(months).sort((a, b) => a.date.localeCompare(b.date));
+const maxTasks = Math.max(...monthArr.map(m => m.tasks.length));
+
+// ===== SCENE SETUP =====
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x060a10, 0.04);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(6, 8, 10);
+camera.lookAt(0, 3, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+container.appendChild(renderer.domElement);
+
+// Post-processing
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.2, 0.6, 0.3
+);
+composer.addPass(bloomPass);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance = 4;
+controls.maxDistance = 25;
+controls.target.set(0, 3, 0);
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.4;
+
+// ===== GRID PLANE =====
+const gridSize = 20;
+const gridDiv = 40;
+const gridHelper = new THREE.GridHelper(gridSize, gridDiv, 0x1a3040, 0x0a1820);
+gridHelper.position.y = -0.5;
+gridHelper.material.opacity = 0.4;
+gridHelper.material.transparent = true;
+scene.add(gridHelper);
+
+// Extra ground plane glow
+const groundGeo = new THREE.PlaneGeometry(gridSize, gridSize);
+const groundMat = new THREE.MeshBasicMaterial({
+  color: 0x0a1820,
+  transparent: true,
+  opacity: 0.3,
+  side: THREE.DoubleSide
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.49;
+scene.add(ground);
+
+// ===== AMBIENT LIGHTING =====
+const ambLight = new THREE.AmbientLight(0x304050, 0.5);
+scene.add(ambLight);
+
+const dirLight = new THREE.DirectionalLight(0x4080a0, 0.4);
+dirLight.position.set(5, 10, 5);
+scene.add(dirLight);
+
+// ===== BUILD CORE SAMPLE =====
+const coreGroup = new THREE.Group();
+scene.add(coreGroup);
+
+const layerHeight = 0.28;
+const coreW = 3.0;  // width (X)
+const coreD = 2.0;  // depth (Z)
+const layerMeshes = []; // for raycasting
+const taskMeshes = [];  // for task click detection
+
+// Holographic shader material
+function createHoloMaterial(color, opacity, completion) {
+  return new THREE.MeshPhysicalMaterial({
+    color: color,
+    transparent: true,
+    opacity: opacity,
+    roughness: 0.4,
+    metalness: 0.6,
+    emissive: color,
+    emissiveIntensity: 0.15 + completion * 0.25,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+}
+
+// Wireframe overlay material
+function createWireMaterial(color) {
+  return new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.08,
+    wireframe: true
+  });
+}
+
+monthArr.forEach((month, mi) => {
+  const y = mi * layerHeight;
+  const totalTasks = month.tasks.length;
+  const doneTasks = month.tasks.filter(t => t.completed).length;
+  const completion = totalTasks > 0 ? doneTasks / totalTasks : 0;
+
+  // Category segments laid out as horizontal bands within the cuboid layer
+  // Each category gets a proportional slice along the X axis
+  let xOffset = -coreW / 2;
+
+  catOrder.forEach(cat => {
+    const catTasks = month.tasks.filter(t => t.category === cat);
+    if (catTasks.length === 0) return;
+
+    const proportion = catTasks.length / totalTasks;
+    const catDone = catTasks.filter(t => t.completed).length;
+    const catCompletion = catTasks.length > 0 ? catDone / catTasks.length : 0;
+    const segW = coreW * proportion;
+
+    const catColor = CATS[cat].color;
+
+    // Solid block segment
+    const segGeo = new THREE.BoxGeometry(segW, layerHeight * 0.85, coreD);
+    const segMat = createHoloMaterial(catColor, 0.12 + catCompletion * 0.35, catCompletion);
+    const segMesh = new THREE.Mesh(segGeo, segMat);
+    segMesh.position.set(xOffset + segW / 2, y, 0);
+    coreGroup.add(segMesh);
+
+    // Top cap plane for segment
+    const capGeo = new THREE.PlaneGeometry(segW, coreD);
+    const capMat = new THREE.MeshBasicMaterial({
+      color: catColor,
+      transparent: true,
+      opacity: 0.06 + catCompletion * 0.15,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const topCap = new THREE.Mesh(capGeo, capMat);
+    topCap.rotation.x = -Math.PI / 2;
+    topCap.position.set(xOffset + segW / 2, y + layerHeight * 0.425, 0);
+    coreGroup.add(topCap);
+
+    // Fossil particles for uncompleted tasks
+    const undoneTasks = catTasks.filter(t => !t.completed);
+    for (let f = 0; f < undoneTasks.length; f++) {
+      const fx = xOffset + Math.random() * segW;
+      const fz = (Math.random() - 0.5) * coreD * 0.85;
+      const fy = y + (Math.random() - 0.5) * layerHeight * 0.6;
+
+      const fossilGeo = new THREE.IcosahedronGeometry(0.06 + Math.random() * 0.04, 0);
+      const fossilMat = new THREE.MeshBasicMaterial({
+        color: catColor,
+        transparent: true,
+        opacity: 0.3,
+        wireframe: true
+      });
+      const fossil = new THREE.Mesh(fossilGeo, fossilMat);
+      fossil.position.set(fx, fy, fz);
+      fossil.userData = { task: undoneTasks[f], category: cat };
+      coreGroup.add(fossil);
+      taskMeshes.push(fossil);
+    }
+
+    // Crystal points for completed tasks
+    const doneTasks = catTasks.filter(t => t.completed);
+    for (let c = 0; c < doneTasks.length; c++) {
+      const cx = xOffset + Math.random() * segW;
+      const cz = (Math.random() - 0.5) * coreD * 0.85;
+      const cy = y + (Math.random() - 0.5) * layerHeight * 0.5;
+
+      const crystalGeo = new THREE.OctahedronGeometry(0.05 + Math.random() * 0.03, 0);
+      const crystalMat = new THREE.MeshBasicMaterial({
+        color: catColor,
+        transparent: true,
+        opacity: 0.5 + Math.random() * 0.3
+      });
+      const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+      crystal.position.set(cx, cy, cz);
+      crystal.rotation.set(Math.random(), Math.random(), Math.random());
+      crystal.userData = { task: doneTasks[c], category: cat };
+      coreGroup.add(crystal);
+      taskMeshes.push(crystal);
+    }
+
+    xOffset += segW;
+  });
+
+  // Wireframe box outline for this layer
+  const wireGeo = new THREE.BoxGeometry(coreW, layerHeight * 0.85, coreD);
+  const wireMat = createWireMaterial(new THREE.Color(0.4, 0.7, 0.8));
+  const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+  wireMesh.position.y = y;
+  coreGroup.add(wireMesh);
+
+  // Edge lines for sharper definition
+  const edgesGeo = new THREE.EdgesGeometry(wireGeo);
+  const edgesMat = new THREE.LineBasicMaterial({
+    color: 0x4080a0,
+    transparent: true,
+    opacity: 0.1
+  });
+  const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+  edges.position.y = y;
+  coreGroup.add(edges);
+
+  // Invisible hitbox for raycasting
+  const hitGeo = new THREE.BoxGeometry(coreW + 0.2, layerHeight, coreD + 0.2);
+  const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+  const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+  hitMesh.position.y = y;
+  hitMesh.userData = { monthIndex: mi, month: month };
+  coreGroup.add(hitMesh);
+  layerMeshes.push(hitMesh);
+
+  // Thin separator line at layer top
+  const sepGeo = new THREE.PlaneGeometry(coreW + 0.06, coreD + 0.06);
+  const sepMat = new THREE.MeshBasicMaterial({
+    color: 0x4080a0,
+    transparent: true,
+    opacity: 0.06,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const sep = new THREE.Mesh(sepGeo, sepMat);
+  sep.rotation.x = -Math.PI / 2;
+  sep.position.y = y + layerHeight * 0.425;
+  coreGroup.add(sep);
+});
+
+// Center the core vertically
+const totalHeight = monthArr.length * layerHeight;
+coreGroup.position.y = -totalHeight / 2 + 3;
+
+// Central axis line
+const axisGeo = new THREE.CylinderGeometry(0.008, 0.008, totalHeight + 1, 8);
+const axisMat = new THREE.MeshBasicMaterial({
+  color: 0x4080a0,
+  transparent: true,
+  opacity: 0.15
+});
+const axis = new THREE.Mesh(axisGeo, axisMat);
+axis.position.y = totalHeight / 2;
+coreGroup.add(axis);
+
+// Scanning plane — rectangular to match cuboid
+const scanGeo = new THREE.PlaneGeometry(coreW + 1.0, coreD + 1.0);
+const scanMat = new THREE.MeshBasicMaterial({
+  color: 0x40c0d0,
+  transparent: true,
+  opacity: 0.08,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+const scanPlane = new THREE.Mesh(scanGeo, scanMat);
+scanPlane.rotation.x = -Math.PI / 2;
+coreGroup.add(scanPlane);
+
+// Vertical scan beams at the four corners of the cuboid
+const halfW = coreW / 2 + 0.4;
+const halfD = coreD / 2 + 0.4;
+const corners = [[-halfW, -halfD], [halfW, -halfD], [halfW, halfD], [-halfW, halfD]];
+corners.forEach(([bx, bz]) => {
+  const beamGeo = new THREE.CylinderGeometry(0.005, 0.005, totalHeight + 2, 4);
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0x2a6070,
+    transparent: true,
+    opacity: 0.1
+  });
+  const beam = new THREE.Mesh(beamGeo, beamMat);
+  beam.position.set(bx, totalHeight / 2, bz);
+  coreGroup.add(beam);
+});
+
+// ===== HUD: Stratum List =====
+const stratumList = document.getElementById('stratum-list');
+// Show a subset — newest first to match the core sample visual
+const listStep = Math.max(1, Math.floor(monthArr.length / 20));
+const listIndices = [];
+monthArr.forEach((month, mi) => {
+  if (mi % listStep === 0 || mi === monthArr.length - 1) listIndices.push(mi);
+});
+listIndices.reverse().forEach(mi => {
+  const month = monthArr[mi];
+  const dt = new Date(month.date + '-15T12:00:00');
+  const label = dt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).toUpperCase();
+  const li = document.createElement('li');
+  li.className = 'stratum-item';
+  li.innerHTML = `<span class="depth">${String(mi).padStart(3, '0')}</span>${label}`;
+  li.dataset.index = mi;
+  li.addEventListener('click', () => selectStratum(mi));
+  stratumList.appendChild(li);
+});
+
+// ===== Legend =====
+const legendPanel = document.getElementById('legend-panel');
+catOrder.forEach(cat => {
+  const c = CATS[cat];
+  legendPanel.innerHTML += `<div class="legend-row"><span>${c.label}</span><div class="legend-swatch" style="background:${c.hex}"></div></div>`;
+});
+
+// ===== Raycasting =====
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let selectedMonth = null;
+let highlightRing = null;
+
+// Highlight frame — rectangular outline around the selected layer
+const hlShape = new THREE.Shape();
+const hlW = coreW / 2 + 0.12;
+const hlD = coreD / 2 + 0.12;
+hlShape.moveTo(-hlW, -hlD);
+hlShape.lineTo(hlW, -hlD);
+hlShape.lineTo(hlW, hlD);
+hlShape.lineTo(-hlW, hlD);
+hlShape.lineTo(-hlW, -hlD);
+const hlHole = new THREE.Path();
+const hlW2 = coreW / 2 + 0.06;
+const hlD2 = coreD / 2 + 0.06;
+hlHole.moveTo(-hlW2, -hlD2);
+hlHole.lineTo(hlW2, -hlD2);
+hlHole.lineTo(hlW2, hlD2);
+hlHole.lineTo(-hlW2, hlD2);
+hlHole.lineTo(-hlW2, -hlD2);
+hlShape.holes.push(hlHole);
+const hlGeo = new THREE.ShapeGeometry(hlShape);
+const hlMat = new THREE.MeshBasicMaterial({
+  color: 0x40d0e0,
+  transparent: true,
+  opacity: 0.6,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+highlightRing = new THREE.Mesh(hlGeo, hlMat);
+highlightRing.rotation.x = -Math.PI / 2;
+highlightRing.visible = false;
+coreGroup.add(highlightRing);
+
+function selectStratum(mi) {
+  const month = monthArr[mi];
+  selectedMonth = mi;
+
+  // Position highlight ring
+  const y = mi * layerHeight;
+  highlightRing.position.y = y;
+  highlightRing.visible = true;
+
+  // Update stratum list
+  document.querySelectorAll('.stratum-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.index) === mi);
+  });
+
+  // Update analysis panel
+  const panel = document.getElementById('analysis-panel');
+  panel.classList.add('visible');
+
+  const dt = new Date(month.date + '-15T12:00:00');
+  const dateLabel = dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+  const total = month.tasks.length;
+  const done = month.tasks.filter(t => t.completed).length;
+  const rate = total > 0 ? Math.round(done / total * 100) : 0;
+
+  let html = `
+    <div class="row"><span>MONTH</span><span class="val">${dateLabel}</span></div>
+    <div class="row"><span>TOTAL TASKS</span><span class="val">${total}</span></div>
+    <div class="row"><span>COMPLETED</span><span class="val">${done} (${rate}%)</span></div>
+    <div class="row"><span>INCOMPLETE</span><span class="val">${total - done}</span></div>
+    <div class="bar-container"><div class="bar-fill" style="width:${rate}%;background:rgba(100,220,200,0.5)"></div></div>
+    <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(100,180,200,0.1);">
+      <div style="color:rgba(140,220,240,0.5);font-size:10px;font-weight:500;letter-spacing:2px;margin-bottom:6px;">COMPOSITION</div>
+  `;
+
+  catOrder.forEach(cat => {
+    const catTasks = month.tasks.filter(t => t.category === cat);
+    if (catTasks.length === 0) return;
+    const catDone = catTasks.filter(t => t.completed).length;
+    html += `<div class="cat-row">
+      <span class="cat-label"><span class="cat-dot" style="background:${CATS[cat].hex}"></span>${CATS[cat].label}</span>
+      <span class="cat-val">${catDone}/${catTasks.length}</span>
+    </div>`;
+  });
+
+  // Stratum summary
+  const summaryKey = month.date;
+  if (SUMMARIES[summaryKey]) {
+    html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,180,200,0.12);">
+      <div style="color:rgba(140,220,240,0.55);font-size:10px;font-weight:500;letter-spacing:2px;margin-bottom:6px;">FIELD NOTES</div>
+      <div style="color:rgba(180,220,235,0.75);font-size:11px;line-height:1.6;font-style:italic;text-align:left;">${SUMMARIES[summaryKey]}</div>
+    </div>`;
+  }
+
+  // Show some actual task texts
+  html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,180,200,0.12);">
+    <div style="color:rgba(140,220,240,0.5);font-size:10px;font-weight:500;letter-spacing:2px;margin-bottom:6px;">SPECIMEN LOG</div>`;
+
+  month.tasks.slice(0, 8).forEach(t => {
+    const icon = t.completed ? '\u25C6' : '\u25C7';
+    const opacity = t.completed ? 0.7 : 0.35;
+    const text = t.text.length > 28 ? t.text.slice(0, 28) + '...' : t.text;
+    html += `<div style="color:rgba(160,230,245,${opacity});font-size:11px;margin:2px 0;text-align:left;">
+      <span style="color:${CATS[t.category].hex}">${icon}</span> ${text}
+    </div>`;
+  });
+
+  if (month.tasks.length > 8) {
+    html += `<div style="color:rgba(100,180,200,0.25);font-size:10px;margin-top:4px;text-align:left;">+ ${month.tasks.length - 8} more</div>`;
+  }
+
+  html += `</div>`;
+
+  document.getElementById('analysis-content').innerHTML = html;
+
+  // Smooth camera towards the layer
+  const worldY = y + coreGroup.position.y;
+  controls.target.lerp(new THREE.Vector3(0, worldY, 0), 0.3);
+}
+
+// Click detection
+// Task tooltip state
+let activeTaskMesh = null;
+const taskTooltip = document.getElementById('task-tooltip');
+const leaderLine = document.getElementById('leader-line');
+const leaderSvg = document.getElementById('leader-svg');
+
+function showTaskTooltip(mesh) {
+  const task = mesh.userData.task;
+  const cat = mesh.userData.category;
+  const catInfo = CATS[cat] || CATS.personal;
+  const status = task.completed ? 'COMPLETED' : 'INCOMPLETE';
+  const statusColor = task.completed ? 'rgba(100,220,180,0.7)' : 'rgba(220,140,100,0.7)';
+
+  taskTooltip.innerHTML = `
+    <div class="tt-status" style="color:${statusColor}">${status}</div>
+    <div class="tt-text">${task.text}</div>
+    <div class="tt-cat" style="color:${catInfo.hex}">${catInfo.label}</div>
+  `;
+  taskTooltip.classList.add('visible');
+  activeTaskMesh = mesh;
+}
+
+function hideTaskTooltip() {
+  taskTooltip.classList.remove('visible');
+  leaderLine.setAttribute('x1', 0);
+  leaderLine.setAttribute('y1', 0);
+  leaderLine.setAttribute('x2', 0);
+  leaderLine.setAttribute('y2', 0);
+  activeTaskMesh = null;
+}
+
+function updateTaskTooltipPosition() {
+  if (!activeTaskMesh) return;
+
+  // Get world position of the task mesh
+  const worldPos = new THREE.Vector3();
+  activeTaskMesh.getWorldPosition(worldPos);
+
+  // Project to screen
+  const screenPos = worldPos.clone().project(camera);
+  const sx = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+  const sy = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+
+  // Position tooltip offset to the right and up
+  const ttX = sx + 60;
+  const ttY = sy - 40;
+
+  // Clamp to viewport
+  const rect = taskTooltip.getBoundingClientRect();
+  const clampedX = Math.min(ttX, window.innerWidth - rect.width - 20);
+  const clampedY = Math.max(20, Math.min(ttY, window.innerHeight - rect.height - 20));
+
+  taskTooltip.style.left = clampedX + 'px';
+  taskTooltip.style.top = clampedY + 'px';
+
+  // Update leader line
+  leaderLine.setAttribute('x1', sx);
+  leaderLine.setAttribute('y1', sy);
+  leaderLine.setAttribute('x2', clampedX);
+  leaderLine.setAttribute('y2', clampedY + (rect.height / 2 || 20));
+}
+
+renderer.domElement.addEventListener('click', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  // Check task meshes first (with a small threshold since they're tiny)
+  const taskHits = raycaster.intersectObjects(taskMeshes);
+  if (taskHits.length > 0 && taskHits[0].distance < 20) {
+    // If clicking the same one, toggle off
+    if (activeTaskMesh === taskHits[0].object) {
+      hideTaskTooltip();
+    } else {
+      showTaskTooltip(taskHits[0].object);
+      updateTaskTooltipPosition();
+    }
+    return;
+  }
+
+  // Fall back to layer selection
+  const layerHits = raycaster.intersectObjects(layerMeshes);
+  if (layerHits.length > 0) {
+    hideTaskTooltip();
+    selectStratum(layerHits[0].object.userData.monthIndex);
+  } else {
+    hideTaskTooltip();
+  }
+});
+
+// Fade instructions
+setTimeout(() => {
+  const inst = document.getElementById('instructions');
+  if (inst) inst.style.opacity = '0';
+}, 6000);
+
+// ===== ANIMATION =====
+let time = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.01;
+
+  controls.update();
+
+  // Scanning plane animation
+  const scanY = ((Math.sin(time * 0.5) + 1) / 2) * totalHeight;
+  scanPlane.position.y = scanY;
+  scanMat.opacity = 0.04 + Math.sin(time * 2) * 0.03;
+
+  // Pulse highlight ring
+  if (highlightRing.visible) {
+    hlMat.opacity = 0.3 + Math.sin(time * 3) * 0.2;
+  }
+
+  // Update task tooltip leader line position as camera orbits
+  if (activeTaskMesh) {
+    updateTaskTooltipPosition();
+  }
+
+  composer.render();
+}
+
+animate();
+
+// ===== RESIZE =====
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

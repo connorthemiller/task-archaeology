@@ -370,6 +370,314 @@
     pointer-events: none;
     transition: opacity 2s;
   }
+
+  /* ===== RESPONSIVE VISIBILITY ===== */
+  .mobile-only { display: none; }
+  .desktop-only { display: inline; }
+
+  /* Month chip strip */
+  .month-chips {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    z-index: 22;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding: 8px 16px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    pointer-events: all;
+  }
+
+  .month-chips::-webkit-scrollbar { display: none; }
+
+  .month-chip {
+    display: inline-block;
+    padding: 6px 14px;
+    margin: 0 4px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: rgba(100, 180, 200, 0.5);
+    background: rgba(10, 20, 30, 0.6);
+    border: 1px solid rgba(100, 180, 200, 0.15);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .month-chip.active {
+    color: rgba(140, 220, 240, 0.95);
+    border-color: rgba(100, 220, 220, 0.5);
+    background: rgba(40, 80, 100, 0.3);
+  }
+
+  /* Bottom sheet */
+  .bottom-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 29;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .bottom-sheet-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .bottom-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    background: rgba(8, 14, 22, 0.97);
+    border-top: 1px solid rgba(100, 180, 200, 0.2);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 70vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 20px 24px;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .bottom-sheet.open {
+    transform: translateY(0);
+  }
+
+  .bottom-sheet-handle {
+    position: sticky;
+    top: 0;
+    background: rgba(8, 14, 22, 0.97);
+    padding: 12px 0 8px;
+    text-align: center;
+    z-index: 1;
+    cursor: grab;
+  }
+
+  .bottom-sheet-handle::before {
+    content: '';
+    display: inline-block;
+    width: 36px;
+    height: 4px;
+    background: rgba(100, 180, 200, 0.3);
+    border-radius: 2px;
+  }
+
+  .bottom-sheet .sheet-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(140, 220, 240, 0.6);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(100, 180, 200, 0.12);
+  }
+
+  .bottom-sheet .sheet-content {
+    font-size: 12px;
+    line-height: 1.8;
+    letter-spacing: 0.5px;
+    color: rgba(140, 200, 220, 0.7);
+  }
+
+  .bottom-sheet .sheet-content .row {
+    display: flex;
+    justify-content: space-between;
+    margin: 3px 0;
+  }
+
+  .bottom-sheet .sheet-content .val {
+    color: rgba(160, 230, 245, 0.9);
+    font-weight: 500;
+  }
+
+  .bottom-sheet .sheet-content .bar-container {
+    margin: 6px 0;
+    height: 4px;
+    background: rgba(100, 180, 200, 0.1);
+  }
+
+  .bottom-sheet .sheet-content .bar-fill {
+    height: 100%;
+  }
+
+  .bottom-sheet .sheet-content .cat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 0;
+  }
+
+  .bottom-sheet .sheet-content .cat-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 7px;
+    opacity: 0.8;
+  }
+
+  .bottom-sheet .sheet-content .cat-label {
+    color: rgba(100, 180, 200, 0.6);
+    font-size: 11px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .bottom-sheet .sheet-content .cat-val {
+    color: rgba(160, 230, 245, 0.85);
+    font-weight: 500;
+  }
+
+  .bottom-sheet .field-notes {
+    color: rgba(180, 220, 235, 0.75);
+    font-size: 12px;
+    line-height: 1.6;
+    font-style: italic;
+    margin: 8px 0;
+  }
+
+  .bottom-sheet .section-label {
+    color: rgba(140, 220, 240, 0.5);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 12px 0 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(100, 180, 200, 0.1);
+  }
+
+  .bottom-sheet .specimen-item {
+    font-size: 11px;
+    margin: 2px 0;
+  }
+
+  /* Legend toggle button */
+  .legend-btn {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 22;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(10, 20, 30, 0.7);
+    border: 1px solid rgba(100, 180, 200, 0.25);
+    color: rgba(140, 220, 240, 0.7);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    pointer-events: all;
+  }
+
+  .legend-overlay {
+    position: fixed;
+    bottom: 64px;
+    right: 16px;
+    z-index: 28;
+    background: rgba(8, 14, 22, 0.95);
+    border: 1px solid rgba(100, 180, 200, 0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: all 0.2s;
+  }
+
+  .legend-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(0);
+  }
+
+  .legend-overlay .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 5px 0;
+    font-size: 11px;
+    color: rgba(100, 180, 200, 0.55);
+  }
+
+  .legend-overlay .legend-swatch {
+    width: 16px;
+    height: 4px;
+    opacity: 0.7;
+  }
+
+  /* ===== MOBILE MEDIA QUERY ===== */
+  @media (max-width: 768px) {
+    .mobile-only { display: block; }
+    .desktop-only { display: none !important; }
+
+    /* Hide desktop panels */
+    .hud-left { display: none !important; }
+    .hud-right { display: none !important; }
+    .hud-bottom-right { display: none !important; }
+    .instructions { display: none !important; }
+
+    /* Compact top header */
+    .hud-top-left {
+      top: 12px;
+      left: 14px;
+      right: 14px;
+    }
+
+    .hud-top-left .sys-label {
+      font-size: 9px;
+      margin-bottom: 2px;
+    }
+
+    .hud-top-left .title {
+      font-size: 17px;
+      letter-spacing: 4px;
+    }
+
+    .hud-top-left .subtitle {
+      font-size: 10px;
+      letter-spacing: 1px;
+    }
+
+    /* Compact bottom bar */
+    .hud-bottom {
+      font-size: 8px;
+      letter-spacing: 1.5px;
+      bottom: 10px;
+      left: 14px;
+      right: 60px; /* room for legend button */
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* Frame tighter */
+    .frame { inset: 4px; }
+
+    /* Task tooltip: position at top on mobile */
+    .task-tooltip {
+      max-width: 220px;
+      font-size: 11px;
+      padding: 10px 12px;
+    }
+
+    .task-tooltip .tt-text { font-size: 12px; }
+    .task-tooltip .tt-status { font-size: 9px; }
+    .task-tooltip .tt-cat { font-size: 9px; }
+  }
 </style>
 </head>
 <body>
@@ -413,6 +721,25 @@
 <!-- HUD: Bottom Right Legend -->
 <div class="hud hud-bottom-right" id="legend-panel"></div>
 
+<!-- Mobile: Month chip strip -->
+<div class="mobile-only month-chips" id="month-chips"></div>
+
+<!-- Mobile: Bottom sheet -->
+<div class="mobile-only bottom-sheet-overlay" id="sheet-overlay"></div>
+<div class="mobile-only bottom-sheet" id="bottom-sheet">
+  <div class="bottom-sheet-handle" id="sheet-handle"></div>
+  <div class="sheet-title">Stratum Analysis</div>
+  <div class="sheet-content" id="sheet-content">
+    <div style="color:rgba(100,180,200,0.3);text-align:center;padding:20px 0;">
+      TAP A LAYER TO ANALYZE
+    </div>
+  </div>
+</div>
+
+<!-- Mobile: Legend button + overlay -->
+<div class="mobile-only legend-btn" id="legend-btn">&#9670;</div>
+<div class="mobile-only legend-overlay" id="legend-overlay"></div>
+
 <!-- Task tooltip with leader line -->
 <svg id="leader-svg" style="position:fixed;inset:0;z-index:25;pointer-events:none;width:100%;height:100%;">
   <line id="leader-line" x1="0" y1="0" x2="0" y2="0" stroke="rgba(100,220,220,0.5)" stroke-width="1" stroke-dasharray="4,3" />
@@ -420,7 +747,8 @@
 <div id="task-tooltip" class="task-tooltip"></div>
 
 <div class="instructions" id="instructions">
-  Drag to orbit &middot; Scroll to zoom &middot; Click stratum to analyze
+  <span class="desktop-only">Drag to orbit &middot; Scroll to zoom &middot; Click stratum to analyze</span>
+  <span class="mobile-only">Touch to orbit &middot; Pinch to zoom &middot; Tap stratum to analyze</span>
 </div>
 
 <script type="importmap">
@@ -5874,7 +6202,11 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x060a10, 0.04);
 
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(6, 8, 10);
+if (window.innerWidth <= 768) {
+  camera.position.set(5, 6, 9);
+} else {
+  camera.position.set(6, 8, 10);
+}
 camera.lookAt(0, 3, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -6347,40 +6679,224 @@ function updateTaskTooltipPosition() {
   leaderLine.setAttribute('y2', clampedY + (rect.height / 2 || 20));
 }
 
-renderer.domElement.addEventListener('click', (e) => {
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+// Desktop-only click handler
+if (!window.matchMedia('(max-width: 768px)').matches) {
+  renderer.domElement.addEventListener('click', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
-  raycaster.setFromCamera(mouse, camera);
+    raycaster.setFromCamera(mouse, camera);
 
-  // Check task meshes first (with a small threshold since they're tiny)
-  const taskHits = raycaster.intersectObjects(taskMeshes);
-  if (taskHits.length > 0 && taskHits[0].distance < 20) {
-    // If clicking the same one, toggle off
-    if (activeTaskMesh === taskHits[0].object) {
-      hideTaskTooltip();
-    } else {
-      showTaskTooltip(taskHits[0].object);
-      updateTaskTooltipPosition();
+    // Check task meshes first (with a small threshold since they're tiny)
+    const taskHits = raycaster.intersectObjects(taskMeshes);
+    if (taskHits.length > 0 && taskHits[0].distance < 20) {
+      // If clicking the same one, toggle off
+      if (activeTaskMesh === taskHits[0].object) {
+        hideTaskTooltip();
+      } else {
+        showTaskTooltip(taskHits[0].object);
+        updateTaskTooltipPosition();
+      }
+      return;
     }
-    return;
-  }
 
-  // Fall back to layer selection
-  const layerHits = raycaster.intersectObjects(layerMeshes);
-  if (layerHits.length > 0) {
-    hideTaskTooltip();
-    selectStratum(layerHits[0].object.userData.monthIndex);
-  } else {
-    hideTaskTooltip();
-  }
-});
+    // Fall back to layer selection
+    const layerHits = raycaster.intersectObjects(layerMeshes);
+    if (layerHits.length > 0) {
+      hideTaskTooltip();
+      selectStratum(layerHits[0].object.userData.monthIndex);
+    } else {
+      hideTaskTooltip();
+    }
+  });
+}
 
 // Fade instructions
 setTimeout(() => {
   const inst = document.getElementById('instructions');
   if (inst) inst.style.opacity = '0';
 }, 6000);
+
+// ===== MOBILE SETUP =====
+const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+if (isMobile) {
+  // Disable auto-rotate on mobile (fights with touch)
+  controls.autoRotate = false;
+
+  // Build month chips (newest first)
+  const chipsContainer = document.getElementById('month-chips');
+  const chipIndices = [];
+  monthArr.forEach((m, i) => chipIndices.push(i));
+  chipIndices.reverse().forEach(mi => {
+    const month = monthArr[mi];
+    const dt = new Date(month.date + '-15T12:00:00');
+    const label = dt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).toUpperCase();
+    const chip = document.createElement('span');
+    chip.className = 'month-chip';
+    chip.textContent = label;
+    chip.dataset.index = mi;
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectStratumMobile(mi);
+    });
+    chipsContainer.appendChild(chip);
+  });
+
+  // Build mobile legend
+  const legendOv = document.getElementById('legend-overlay');
+  catOrder.forEach(cat => {
+    const c = CATS[cat];
+    legendOv.innerHTML += `<div class="legend-row"><div class="legend-swatch" style="background:${c.hex}"></div><span>${c.label}</span></div>`;
+  });
+
+  // Legend button toggle
+  const legendBtn = document.getElementById('legend-btn');
+  legendBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    legendOv.classList.toggle('visible');
+  });
+
+  // Bottom sheet elements
+  const sheet = document.getElementById('bottom-sheet');
+  const sheetOverlay = document.getElementById('sheet-overlay');
+  const sheetContent = document.getElementById('sheet-content');
+
+  function openSheet() {
+    sheet.classList.add('open');
+    sheetOverlay.classList.add('visible');
+  }
+
+  function closeSheet() {
+    sheet.classList.remove('open');
+    sheetOverlay.classList.remove('visible');
+  }
+
+  sheetOverlay.addEventListener('click', closeSheet);
+
+  // Swipe down to close
+  let sheetTouchStartY = 0;
+  const sheetHandle = document.getElementById('sheet-handle');
+  sheetHandle.addEventListener('touchstart', (e) => {
+    sheetTouchStartY = e.touches[0].clientY;
+  });
+  sheetHandle.addEventListener('touchmove', (e) => {
+    const dy = e.touches[0].clientY - sheetTouchStartY;
+    if (dy > 60) closeSheet();
+  });
+
+  function selectStratumMobile(mi) {
+    const month = monthArr[mi];
+
+    // Highlight chip
+    document.querySelectorAll('.month-chip').forEach(c =>
+      c.classList.toggle('active', parseInt(c.dataset.index) === mi)
+    );
+
+    // Scroll active chip into view
+    const activeChip = document.querySelector('.month-chip.active');
+    if (activeChip) activeChip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+
+    // Position highlight ring
+    const y = mi * layerHeight;
+    highlightRing.position.y = y;
+    highlightRing.visible = true;
+
+    // Camera
+    const worldY = y + coreGroup.position.y;
+    controls.target.lerp(new THREE.Vector3(0, worldY, 0), 0.3);
+
+    // Build sheet content
+    const dt = new Date(month.date + '-15T12:00:00');
+    const dateLabel = dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+    const total = month.tasks.length;
+    const done = month.tasks.filter(t => t.completed).length;
+    const rate = total > 0 ? Math.round(done / total * 100) : 0;
+
+    let html = `
+      <div class="row"><span>MONTH</span><span class="val">${dateLabel}</span></div>
+      <div class="row"><span>TOTAL TASKS</span><span class="val">${total}</span></div>
+      <div class="row"><span>COMPLETED</span><span class="val">${done} (${rate}%)</span></div>
+      <div class="row"><span>INCOMPLETE</span><span class="val">${total - done}</span></div>
+      <div class="bar-container"><div class="bar-fill" style="width:${rate}%;background:rgba(100,220,200,0.5)"></div></div>
+    `;
+
+    // Field notes
+    const summaryKey = month.date;
+    if (SUMMARIES[summaryKey]) {
+      html += `<div class="section-label">FIELD NOTES</div>
+        <div class="field-notes">${SUMMARIES[summaryKey]}</div>`;
+    }
+
+    // Composition
+    html += `<div class="section-label">COMPOSITION</div>`;
+    catOrder.forEach(cat => {
+      const catTasks = month.tasks.filter(t => t.category === cat);
+      if (catTasks.length === 0) return;
+      const catDone = catTasks.filter(t => t.completed).length;
+      html += `<div class="cat-row">
+        <span class="cat-label"><span class="cat-dot" style="background:${CATS[cat].hex}"></span>${CATS[cat].label}</span>
+        <span class="cat-val">${catDone}/${catTasks.length}</span>
+      </div>`;
+    });
+
+    // Specimen log
+    html += `<div class="section-label">SPECIMEN LOG</div>`;
+    month.tasks.slice(0, 10).forEach(t => {
+      const icon = t.completed ? '\u25C6' : '\u25C7';
+      const opacity = t.completed ? 0.7 : 0.35;
+      const text = t.text.length > 36 ? t.text.slice(0, 36) + '...' : t.text;
+      html += `<div class="specimen-item" style="color:rgba(160,230,245,${opacity});">
+        <span style="color:${CATS[t.category].hex}">${icon}</span> ${text}
+      </div>`;
+    });
+    if (month.tasks.length > 10) {
+      html += `<div style="color:rgba(100,180,200,0.25);font-size:10px;margin-top:4px;">+ ${month.tasks.length - 10} more</div>`;
+    }
+
+    sheetContent.innerHTML = html;
+    openSheet();
+  }
+
+  // Override click handler for mobile — use bottom sheet instead of desktop panel
+  renderer.domElement.addEventListener('click', (e) => {
+    // Close legend if open
+    document.getElementById('legend-overlay').classList.remove('visible');
+  });
+
+  // Override the main click to route to mobile
+  renderer.domElement.removeEventListener('click', renderer.domElement._desktopClick);
+
+  // Touch-tap on core to select layer
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    // Only handle quick taps, not drag ends
+    if (e.pointerType !== 'touch') return;
+
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    // Check task meshes first
+    const taskHits = raycaster.intersectObjects(taskMeshes);
+    if (taskHits.length > 0 && taskHits[0].distance < 20) {
+      if (activeTaskMesh === taskHits[0].object) {
+        hideTaskTooltip();
+      } else {
+        showTaskTooltip(taskHits[0].object);
+        updateTaskTooltipPosition();
+      }
+      return;
+    }
+
+    // Then layers
+    const layerHits = raycaster.intersectObjects(layerMeshes);
+    if (layerHits.length > 0) {
+      hideTaskTooltip();
+      selectStratumMobile(layerHits[0].object.userData.monthIndex);
+    }
+  });
+}
 
 // ===== ANIMATION =====
 let time = 0;
